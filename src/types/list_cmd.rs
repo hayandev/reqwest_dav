@@ -14,7 +14,8 @@ pub struct ListMultiStatus {
 pub struct ListResponse {
     pub href: String,
     #[serde(rename = "propstat")]
-    pub prop_stat: Vec<ListPropStat>,
+    pub prop_stat: Option<Vec<ListPropStat>>,
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -67,6 +68,7 @@ pub struct ListProp {
 pub enum ListEntity {
     File(ListFile),
     Folder(ListFolder),
+    Err(ListErr),
 }
 
 #[derive(Debug, Clone)]
@@ -87,6 +89,12 @@ pub struct ListFolder {
     pub tag: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ListErr {
+    pub href: String,
+    pub status: String,
+}
+
 fn status_is_ok(status: &str) -> bool {
     let code = status.split_whitespace().nth(1);
 
@@ -99,8 +107,24 @@ fn status_is_ok(status: &str) -> bool {
 impl TryFrom<ListResponse> for ListEntity {
     type Error = crate::types::Error;
     fn try_from(response: ListResponse) -> Result<Self, Self::Error> {
+        match response.status {
+            Some(status) => {
+                return Ok(ListEntity::Err(ListErr {
+                    href: response.href,
+                    status: status,
+                }));
+            }
+            None if response.prop_stat.is_none() => {
+                return Err(Error::Decode(DecodeError::FieldNotFound(FieldError {
+                    field: "status with valid status".to_owned(),
+                })))
+            }
+            _ => {},
+        }
+
         let valid_prop_stat = response
             .prop_stat
+            .unwrap()
             .into_iter()
             .filter(|prop_stat| status_is_ok(&prop_stat.status))
             .next();
