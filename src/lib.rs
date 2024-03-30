@@ -92,6 +92,23 @@ impl Client {
         self.get_raw(path).await?.dav2xx().await
     }
 
+    pub async fn get_range_raw(&self, path: &str, offset: u64, size: u64) -> Result<Response, Error> {
+        let range = format!("bytes={}-{}", offset, offset + size - 1);
+        Ok(self
+            .start_request(Method::GET, path)
+            .await?
+            .header("Range", range)
+            .send()
+            .await?)
+    }
+
+    /// Get a range of bytes from a file on Webdav server
+    ///
+    /// Use absolute path to the webdav server file location
+    pub async fn get_range(&self, path: &str, offset: u64, size: u64) -> Result<Response, Error> {
+        self.get_range_raw(path, offset, size).await?.dav2xx().await
+    }
+
     pub async fn put_raw<B: Into<Body>>(&self, path: &str, body: B) -> Result<Response, Error> {
         Ok(self
             .start_request(Method::PUT, path)
